@@ -41,7 +41,7 @@ app.get('/', (_, res) => {
 
 app.use('/persons', personsRouter);
 app.use('/meetings', meetingsRouter);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));``
 
 app.use((_, res) => {
   res.status(404).json({ error: 'Not Found' });
