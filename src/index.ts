@@ -18,17 +18,7 @@ const swaggerOptions = {
       title: 'Scheduler API',
       version: '1.0.0',
       description: 'API for managing persons and meetings',
-    },
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-        },
-      },
-    },
-    security: [{ bearerAuth: [] }],
+    }
   },
   apis: ['./src/routes/*.ts'],
 };
@@ -36,7 +26,7 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 app.get('/', (_, res) => {
-  res.send('Scheduler API is running');
+  res.redirect('/api-docs');
 });
 
 app.use('/persons', personsRouter);

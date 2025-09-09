@@ -7,5 +7,5 @@ export interface Person {
 export interface Meeting {
   id: string;
   time: string; // ISO string
-  participants: Person[];
+  participants: string[];
 }

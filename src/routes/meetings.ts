@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import type { Meeting, Person } from '../models/types';
-import { persons, meetings } from '../models/data';
+import { persons, meetings, personSchedules } from '../models/data';
+import { isHourMark } from '../utils/utils';
 
 const meetingsRouter = Router();
 
@@ -31,7 +32,7 @@ const meetingsRouter = Router();
  *                 type: array
  *                 items:
  *                   type: string
- *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
+ *                 example: ["123e4567-e89b-12d3-a456-426614174000", "123e4567-e89b-12d3-a456-426614174001"]
  *     responses:
  *       201:
  *         description: Meeting created
@@ -40,7 +41,7 @@ const meetingsRouter = Router();
  *             example:
  *               id: "meeting-1"
  *               time: "2025-09-09T10:00:00.000Z"
- *               participants: ["123e4567-e89b-12d3-a456-426614174000"]
+ *               participants: ["123e4567-e89b-12d3-a456-426614174000", "123e4567-e89b-12d3-a456-426614174001"]
  *       400:
  *         description: Invalid input or not at hour mark
  *       409:
@@ -49,17 +50,27 @@ const meetingsRouter = Router();
 meetingsRouter.post('/', (req, res) => {
   const { time, participants } = req.body;
   if (!time || !participants || !Array.isArray(participants) || participants.length === 0) {
-    return res.status(400).json({ error: 'Time and participants required' });
+    return res.status(400).json({ error: 'Time and participants are required' });
   }
-  if (!isHourMark(time)) return res.status(400).json({ error: 'Meeting must start at the hour mark' });
+  
+  if (!isHourMark(time)) {
+    return res.status(400).json({ error: 'Meeting must start at the hour mark' });
+  }
+
   for (const pid of participants) {
     if (!persons.find(p => p.id === pid)) return res.status(404).json({ error: `Person ${pid} not found` });
-    if (meetings.some(m => m.time === time && m.participants.includes(pid))) {
+    if (personSchedules.get(pid)?.has(time)) {
       return res.status(409).json({ error: `Person ${pid} has a conflict at this time` });
     }
   }
+
   const meeting: Meeting = { id: uuidv4(), time, participants };
   meetings.push(meeting);
+  // Update schedule map
+  for (const pid of participants) {
+    if (!personSchedules.has(pid)) personSchedules.set(pid, new Set());
+    personSchedules.get(pid)!.add(time);
+  }
   res.status(201).json(meeting);
 });
 
@@ -68,7 +79,7 @@ meetingsRouter.post('/', (req, res) => {
  * /meetings/suggest:
  *   post:
  *     summary: Suggest available timeslots
- *     description: Suggest one or more available timeslots for meetings given a group of persons.
+ *     description: Suggest available one-hour timeslots for meetings for a group of persons, starting from the specified 'from' time. Returns up to the next 24 available hour slots. Each slot is at the hour mark in UTC and lasts exactly one hour. The 'to' parameter is not required; suggestions are always for the next 24 hours from 'from'.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -80,7 +91,6 @@ meetingsRouter.post('/', (req, res) => {
  *             required:
  *               - participants
  *               - from
- *               - to
  *             properties:
  *               participants:
  *                 type: array
@@ -91,23 +101,32 @@ meetingsRouter.post('/', (req, res) => {
  *                 type: string
  *                 format: date-time
  *                 example: "2025-09-09T09:00:00.000Z"
- *               to:
- *                 type: string
- *                 format: date-time
- *                 example: "2025-09-09T12:00:00.000Z"
  *     responses:
  *       200:
- *         description: List of available timeslots
+ *         description: List of available timeslots (next 24 hour slots from 'from')
  *         content:
  *           application/json:
  *             example:
  *               slots: ["2025-09-09T09:00:00.000Z", "2025-09-09T11:00:00.000Z"]
  */
+meetingsRouter.post('/suggest', (req, res) => {
+  const { participants, from } = req.body;
+  if (!participants || !Array.isArray(participants) || participants.length === 0 || !from) {
+    return res.status(400).json({ error: 'Participants and from are required' });
+  }
+  const start = new Date(from);
+  const slots: string[] = [];
+  
+  // Suggest next 24 hour slots from 'from'
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(start);
+    d.setUTCHours(start.getUTCHours() + i, 0, 0, 0);
+    const slot = d.toISOString();
+    const conflict = participants.some(pid => personSchedules.get(pid)?.has(slot));
+    if (!conflict) slots.push(slot);
+  }
+  res.json({ slots });
+});
 
-// Helper: Check if time is valid (hour mark, ISO string)
-function isHourMark(time: string): boolean {
-  const date = new Date(time);
-  return date.getMinutes() === 0 && date.getSeconds() === 0 && date.getMilliseconds() === 0;
-}
 
 export default meetingsRouter;
