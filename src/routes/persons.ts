@@ -58,8 +58,8 @@ personsRouter.post('/', (req, res) => {
  *     responses:
  *       200:
  *         description: List of upcoming meetings
-  *      404:
-  *        description: Person not found
+ *       404:
+ *         description: Person not found
  */
 personsRouter.get('/:id/schedule', (req, res) => {
   const { id } = req.params;
